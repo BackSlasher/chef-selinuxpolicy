@@ -1,5 +1,5 @@
-class Chef
-  module SELinuxPolicy
+module SELinuxPolicy
+  module Cookbook
     module Helpers
       require 'chef/mixin/shell_out'
       include Chef::Mixin::ShellOut
@@ -20,16 +20,6 @@ class Chef
         return_val
       end
 
-      def sebool(new_resource, persist = false)
-        persist_string = persist ? '-P ' :  ''
-        new_value = new_resource.value ? 'on' : 'off'
-        execute "selinux-setbool-#{new_resource.name}-#{new_value}" do
-          command "#{setsebool_cmd} #{persist_string} #{new_resource.name} #{new_value}"
-          not_if "#{getsebool_cmd} #{new_resource.name} | grep '#{new_value}$' >/dev/null" unless new_resource.force
-          only_if { use_selinux(new_resource.allow_disabled) }
-        end
-      end
-
       def module_defined(name)
         "#{semodule_cmd} -l | grep -w '^#{name}'"
       end
@@ -46,10 +36,6 @@ class Chef
                  'grep -q ^'
                end
         "#{base_command} | #{grep}"
-      end
-
-      def validate_port(port)
-        raise ArgumentError, "port value: #{port} is invalid." unless port.to_s =~ /^\d+$/
       end
 
       def fcontext_defined(file_spec, file_type, label = nil)
@@ -70,7 +56,7 @@ class Chef
 
       def semanage_options(file_type)
         # Set options for file_type
-        if node['platform_family'].include?('rhel') && Chef::VersionConstraint.new('< 7.0').include?(node['platform_version'])
+        if platform_family?('rhel') && node['platform_version'].to_i == 6
           case file_type
           when 'a' then '-f ""'
           when 'f' then '-f --'
@@ -81,28 +67,36 @@ class Chef
         end
       end
 
-      require 'chef/mixin/which'
-      include Chef::Mixin::Which
+      def cmd_path(command)
+        if platform_family?('rhel') && node['platform_version'].to_i == 6
+          "/usr/sbin/#{command}"
+        else
+          "/sbin/#{command}"
+        end
+      end
 
       def setsebool_cmd
-        @setsebool_cmd ||= which('setsebool')
+        cmd_path('setsebool')
       end
 
       def getsebool_cmd
-        @getsebool_cmd ||= which('getsebool')
+        cmd_path('getsebool')
       end
 
       def getenforce_cmd
-        @getenforce_cmd ||= which('getenforce')
+        cmd_path('getenforce')
       end
 
       def semanage_cmd
-        @semanage_cmd ||= which('semanage')
+        cmd_path('semanage')
       end
 
       def semodule_cmd
-        @semodule_cmd ||= which('semodule')
+        cmd_path('semodule')
       end
     end
   end
 end
+
+Chef::Recipe.include ::SELinuxPolicy::Cookbook::Helpers
+Chef::Resource.include ::SELinuxPolicy::Cookbook::Helpers

@@ -5,5 +5,5 @@ end
 reboot 'SELinux Reboot' do
   action :nothing
   reason 'Rebooting to enable SELinux.'
-  delay_mins 7
+  not_if "sestatus | grep -qEi 'SELinux status:\s+enabled'"
 end
